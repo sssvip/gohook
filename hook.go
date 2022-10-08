@@ -25,6 +25,7 @@ import "C"
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 	"unsafe"
@@ -98,6 +99,9 @@ var (
 	keys   = map[int][]uint16{}
 	cbs    = map[int]func(Event){}
 	events = map[uint8][]int{}
+
+	keyMap      = map[string]int{}
+	registerLck sync.Mutex
 )
 
 func allPressed(pressed map[uint16]bool, keys ...uint16) bool {
@@ -125,6 +129,29 @@ func Register(when uint8, cmds []string, cb func(Event)) {
 	cbs[key] = cb
 	events[when] = append(events[when], key)
 	// return
+}
+
+// RegisterOverrideRepeat register gohook event override repeat cmds
+func RegisterOverrideRepeat(when uint8, cmds []string, cb func(Event)) {
+	registerLck.Lock() // 防止并发
+	defer registerLck.Unlock()
+	k := strings.Join(cmds, "+")
+	key := len(used)
+	if idx, ok := keyMap[k]; ok {
+		key = idx
+	} else {
+		// new
+		used = append(used, key)
+		events[when] = append(events[when], key)
+		keyMap[k] = key
+	}
+	// override or new
+	tmp := []uint16{}
+	for _, v := range cmds {
+		tmp = append(tmp, Keycode[v])
+	}
+	keys[key] = tmp
+	cbs[key] = cb
 }
 
 // Process return go hook process
